@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RSVP 事件账本控制台</title>
+<style>
+  :root { --bd:#d9dee5; --mut:#6b7280; --red:#b42318; --amb:#b54708; --grn:#027a48; --blue:#175cd3; --bg:#f6f7f9; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:#111827; }
+  header { background:#101828; color:#fff; padding:10px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  nav button { background:transparent; color:#cbd5e1; border:0; padding:8px 12px; cursor:pointer; font-size:14px; border-bottom:2px solid transparent; }
+  nav button.active { color:#fff; border-bottom-color:#7db6ff; }
+  main { padding:18px; max-width:1180px; margin:0 auto; }
+  .cards { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .card { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:10px 14px; min-width:110px; }
+  .card b { display:block; font-size:22px; }
+  .card span { color:var(--mut); font-size:12px; }
+  table { border-collapse:collapse; width:100%; background:#fff; border:1px solid var(--bd); border-radius:8px; overflow:hidden; }
+  th, td { padding:7px 10px; border-bottom:1px solid #eef0f3; text-align:left; font-size:13px; vertical-align:top; }
+  th { background:#f0f2f5; font-weight:600; white-space:nowrap; }
+  tr:last-child td { border-bottom:0; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .s-confirmed { background:#d1fadf; color:var(--grn); }
+  .s-pending { background:#fef0c7; color:var(--amb); }
+  .s-declined { background:#fee4e2; color:var(--red); }
+  .s-null { background:#e4e7ec; color:#475467; }
+  .s-conflict { background:#fecdca; color:var(--red); }
+  .eff-applied { color:var(--grn); font-weight:700; }
+  .eff-superseded, .eff-convergent { color:var(--mut); }
+  .eff-conflicted { color:var(--red); font-weight:700; }
+  button.act { border:1px solid var(--bd); background:#fff; border-radius:6px; padding:4px 10px; cursor:pointer; margin:2px 4px 2px 0; }
+  button.act:hover { border-color:#98a2b3; }
+  button.primary { background:var(--blue); color:#fff; border-color:var(--blue); }
+  button.danger { color:var(--red); border-color:#f0a39d; }
+  textarea, input, select { font:inherit; padding:6px 8px; border:1px solid var(--bd); border-radius:6px; }
+  textarea { width:100%; height:170px; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .panel { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:14px; margin-bottom:14px; }
+  .panel h3 { margin:0 0 10px; font-size:14px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .muted { color:var(--mut); }
+  .warn { background:#fffaeb; border:1px solid #fedf89; border-radius:6px; padding:8px 12px; margin:8px 0; }
+  .err  { background:#fef3f2; border:1px solid #fecdca; border-radius:6px; padding:8px 12px; margin:8px 0; color:var(--red); white-space:pre-wrap; }
+  .ok   { background:#ecfdf3; border:1px solid #abefc6; border-radius:6px; padding:8px 12px; margin:8px 0; color:var(--grn); }
+  dialog { border:1px solid var(--bd); border-radius:10px; padding:0; width:min(820px,92vw); }
+  dialog .dbody { padding:16px 20px 20px; max-height:78vh; overflow:auto; }
+  .lock { color:var(--amb); }
+  .child-flag { color:#7a5af8; font-weight:700; }
+  details summary { cursor:pointer; font-weight:600; margin:6px 0; }
+  code { background:#f0f2f5; padding:1px 4px; border-radius:4px; }
+  .seatmap td { text-align:center; min-width:74px; }
+  .seatmap .empty { color:#b6bcc6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💍 RSVP 事件账本控制台</h1>
+  <nav id="nav">
+    <button data-tab="review" class="active">待处理</button>
+    <button data-tab="guests">宾客与历史</button>
+    <button data-tab="import">批量导入</button>
+    <button data-tab="seating">排座与候选</button>
+    <button data-tab="ledger">账本/导出</button>
+  </nav>
+  <span style="flex:1"></span>
+  <button class="act" style="color:#fff;border-color:#475467" onclick="load()">刷新</button>
+</header>
+<main id="main"></main>
+
+<dialog id="dlg"><div class="dbody" id="dlgBody"></div></dialog>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
