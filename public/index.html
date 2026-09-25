@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSVP 事件账本 · 排座影响台</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --ink:#1f2430; --muted:#6b7280;
+    --ok:#1a7f37; --okbg:#e8f5ec; --warn:#b25e00; --warnbg:#fff4e0; --err:#b42318; --errbg:#fdecea; --blue:#0b5cad; --bluebg:#e8f1fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:#16202e; color:#fff; padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  header .meta { color:#9fb0c3; font-size:12.5px; }
+  main { max-width:1180px; margin:18px auto; padding:0 16px 60px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  .card h2 { margin:0 0 10px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+  .col { flex:1 1 460px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover { background:#f2f6fb; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; white-space:nowrap; }
+  .b-confirmed { background:var(--okbg); color:var(--ok); }
+  .b-pending { background:#fff8db; color:#8a6400; }
+  .b-declined { background:#f0f0f3; color:#555; }
+  .b-none { background:#f0f0f3; color:#888; }
+  .b-conflict { background:var(--errbg); color:var(--err); font-weight:600; }
+  .lock { color:var(--warn); font-size:12px; }
+  button { font:inherit; padding:6px 14px; border-radius:7px; border:1px solid #c4cbd4; background:#fff; cursor:pointer; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.danger { color:var(--err); border-color:#e2a29c; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  textarea,select,input { font:12.5px ui-monospace,Menlo,Consolas,monospace; padding:7px 9px; border:1px solid #c4cbd4; border-radius:7px; width:100%; }
+  textarea { min-height:170px; }
+  .muted { color:var(--muted); font-size:12.5px; }
+  .alert { border-radius:8px; padding:10px 13px; margin:10px 0; font-size:13px; border:1px solid; white-space:pre-wrap; }
+  .alert.err { background:var(--errbg); border-color:#f3c2bd; color:var(--err); }
+  .alert.warn { background:var(--warnbg); border-color:#f3d8a8; color:var(--warn); }
+  .alert.ok { background:var(--okbg); border-color:#bfe3c9; color:var(--ok); }
+  .alert.info { background:var(--bluebg); border-color:#bcd6f2; color:var(--blue); }
+  .tag { font-size:11px; padding:0 6px; border-radius:4px; border:1px solid var(--line); color:var(--muted); margin-left:6px; }
+  .tag.stale { background:#f0f0f3; }
+  .tag.res { background:var(--bluebg); color:var(--blue); border-color:#bcd6f2; }
+  dialog { border:1px solid var(--line); border-radius:12px; padding:0; width:min(760px,94vw); }
+  dialog::backdrop { background:rgba(20,28,40,.45); }
+  .dlg-head { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  .dlg-body { padding:14px 20px 20px; max-height:70vh; overflow:auto; }
+  .pillbtn { font-size:12px; padding:2px 10px; }
+  .kv { font-size:12.5px; color:var(--muted); }
+  .cand-line { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px dashed var(--line); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:860px){ .grid2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>RSVP 事件账本 · 排座影响台</h1>
+  <span class="meta">事件账本与物化状态同库保存 · 自动排座只给候选不动席位</span>
+  <span style="flex:1"></span>
+  <button onclick="load()">刷新最新状态</button>
+  <a class="meta" href="/api/export?kind=state" style="color:#cfe0f3">导出当前状态CSV</a>
+  <a class="meta" href="/api/export?kind=ledger" style="color:#cfe0f3">导出事件账本CSV</a>
+</header>
+
+<main>
+  <div id="banner"></div>
+
+  <section class="card">
+    <h2>⚠ 待人工处理：冲突与席位影响 <span class="muted" id="affectedCount"></span></h2>
+    <div id="conflicts"></div>
+    <div id="affected"></div>
+  </section>
+
+  <div class="row">
+    <section class="card col">
+      <h2>自动排座候选（不移动任何现有席位）</h2>
+      <div id="candidates"></div>
+      <p class="muted" id="candHint"></p>
+    </section>
+    <section class="card col">
+      <h2>桌卡 / 桌位现状</h2>
+      <div id="tables"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>宾客与当前物化状态 <span class="muted">（点击姓名查看完整事件历史 / 影响）</span></h2>
+    <div style="overflow-x:auto"><table id="guestTable">
+      <thead><tr><th>宾客</th><th>姓名</th><th>当前状态</th><th>来源/事件号</th><th>人数/儿童</th><th>席位</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>离线表格批量导入（两家人各自补录）</h2>
+    <div class="row">
+      <div style="flex:1 1 320px">
+        <div class="muted" style="margin-bottom:6px">默认来源（CSV 无 source 列时使用；两家人请用不同来源，如 family-a / family-b）</div>
+        <input id="src" placeholder="family-a" style="width:220px">
+      </div>
+      <div style="flex:1 1 320px">
+        <input type="file" id="file" accept=".csv,text/csv">
+      </div>
+    </div>
+    <p class="muted" style="margin:8px 0 4px">列：source,source_seq,guest_id,status,party_size,children,child_seat,occurred_at（source 列可省略）</p>
+    <textarea id="csv" placeholder="source,source_seq,guest_id,status,party_size,children,child_seat,occurred_at&#10;family-a,1,G01,confirmed,3,1,1,2026-09-20T10:00:00Z"></textarea>
+    <div style="margin-top:10px; display:flex; gap:10px">
+      <button class="primary" onclick="doImport()">整批导入</button>
+      <button onclick="document.getElementById('csv').value=SAMPLE">填入示例</button>
+    </div>
+    <div id="importResult"></div>
+  </section>
+</main>
+
+<dialog id="histDlg">
+  <div class="dlg-head"><strong id="histTitle"></strong><button onclick="histDlg.close()">关闭</button></div>
+  <div class="dlg-body" id="histBody"></div>
+</dialog>
+
+<script>
+const SAMPLE = `source,source_seq,guest_id,status,party_size,children,child_seat,occurred_at
+family-a,1,G01,confirmed,3,1,1,2026-09-20T10:00:00Z`;
+let STATE = null;
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const statusBadge = (g) => {
+  if (g.conflict) return `<span class="badge b-conflict">冲突待处理（暂取${esc(g.status)}）</span>`;
+  const map = {confirmed:['b-confirmed','确认'], pending:['b-pending','待定'], declined:['b-declined','婉拒']};
+  const m = map[g.status];
+  return m ? `<span class="badge ${m[0]}">${m[1]}</span>` : `<span class="badge b-none">无回复</span>`;
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, { headers: {'content-type':'application/json'}, ...opts });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || '请求失败'), { errors: data.errors });
+  return data;
+}
+
+async function load() {
+  STATE = await api('/api/state');
+  render();
+}
+
+function render() {
+  renderGuests(); renderConflicts(); renderAffected(); renderCandidates(); renderTables();
+  document.getElementById('affectedCount').textContent =
+    `共 ${STATE.affected.filter(a=>a.manualOnly).length} 项待人工处理`;
+}
+
+function renderGuests() {
+  const tb = document.querySelector('#guestTable tbody');
+  tb.innerHTML = STATE.guests.map(g => {
+    const a = g.assignment;
+    const seat = a ? `${esc(tableName(a.tableId))}${a.locked ? ' <span class="lock">🔒锁定</span>' : ''}` : '<span class="muted">未排座</span>';
+    return `<tr class="clickable" onclick="openGuest('${esc(g.id)}')">
+      <td>${esc(g.id)}</td><td>${esc(g.name)}</td>
+      <td>${statusBadge(g)}</td>
+      <td class="kv">${g.source ? esc(g.source)+' #'+g.eventNo : '—'}</td>
+      <td class="kv">${g.partySize ?? '—'} 人${g.childSeatNeeded ? ' / '+g.children+' 童椅' : ''}</td>
+      <td>${seat}</td></tr>`;
+  }).join('');
+}
+
+function tableName(id){ const t = STATE.tables.find(x=>x.id===id); return t ? t.name : id; }
+
+function renderConflicts() {
+  const list = STATE.guests.filter(g => g.conflict);
+  const el = document.getElementById('conflicts');
+  if (!list.length) { el.innerHTML = '<div class="muted">无跨来源冲突。</div>'; return; }
+  el.innerHTML = list.map(g => `<div class="alert err">
+    <b>${esc(g.id)} ${esc(g.name)}</b>：${esc(g.conflict.reason)}
+    <table style="margin-top:6px; background:#fff">
+      <thead><tr><th>来源</th><th>事件号</th><th>来源序号</th><th>状态/人数/儿童/童椅</th></tr></thead>
+      <tbody>${g.conflict.winners.map(w => `<tr>
+        <td>${esc(w.source)}</td><td>#${w.eventNo}</td><td>${w.sourceSeq}</td><td>${esc(w.fingerprint)}</td>
+        <td><button class="pillbtn" onclick="doResolve('${esc(g.id)}','${esc(w.source)}')">裁决采用此来源</button></td>
+      </tr>`).join('')}</tbody></table>
+    ${g.conflict.kind === 'resolution-stale' ? '<div class="muted">（此前裁决已被新事件推翻，需重新确认）</div>' : ''}
+  </div>`).join('');
+}
+
+async function doResolve(guestId, winSource) {
+  const note = prompt(`记录人工裁决：${guestId} 采用来源 ${winSource}。备注（可空）：`, '');
+  if (note === null) return;
+  await api('/api/resolve', { method:'POST', body: JSON.stringify({ guestId, winSource, note }) });
+  await load();
+}
+
+function renderAffected() {
+  const el = document.getElementById('affected');
+  let html = '';
+  for (const a of STATE.affected) {
+    if (a.guestId) {
+      const cls = a.locked ? 'warn' : 'info';
+      html += `<div class="alert ${cls}">${a.locked ? '🔒 <b>锁定席</b>' : '席位'} 宾客 <b>${esc(a.guestId)}</b> @${esc(a.tableId)}
+        当前变为：${a.problems.map(esc).join('、')}。${esc(a.suggestion)}</div>`;
+    } else {
+      const detail = a.problem === 'capacity-overflow' ? `${a.seats}/${a.capacity} 座`
+        : a.problem === 'child-seat-overflow' ? `${a.childSeats}/${a.childCapacity} 张童椅`
+        : a.problem === 'same-table-broken' ? `${esc(a.guests.join(' ↔ '))}`
+        : a.problem === 'avoid-violation' ? `${esc(a.guests.join(' ✕ '))} @${esc(a.tableId)}` : '';
+      html += `<div class="alert warn">⚠ 桌 ${esc(a.tableId ?? '')} ${esc(a.problem)} ${detail}（只登记待人工处理）</div>`;
+    }
+  }
+  el.innerHTML = html || '<div class="muted">已排座宾客暂无受影响变更；锁定席/同桌/避让关系均完好。</div>';
+}
+
+function renderCandidates() {
+  const el = document.getElementById('candidates');
+  if (!STATE.candidates.length) {
+    el.innerHTML = '<div class="muted">当前没有新的自动候选（未入座且状态明确的确认宾客才会入候选）。</div>';
+  } else {
+    el.innerHTML = STATE.candidates.map((p,i) => `<div class="cand-line">
+      <span>🪑 ${p.guestIds.map(esc).join(' + ')} → <b>${esc(tableName(p.tableId))}</b></span></div>`).join('');
+    el.innerHTML += `<div style="margin-top:10px"><button class="primary" onclick="doApply()">人工确认并应用全部候选</button></div>`;
+  }
+  const ex = STATE.excluded;
+  document.getElementById('candHint').innerHTML = ex.length
+    ? '未入候选：' + ex.map(x => `${esc(x.guestId)}（${esc(x.reason)}）`).join('；')
+    : '候选生成时强制保留锁定席、儿童椅、同桌与避让约束。';
+}
+
+async function doApply() {
+  if (!confirm('将按上方候选落座（仅新增，不移动任何现有席位/锁定席）。继续？')) return;
+  const r = await api('/api/apply', { method:'POST', body: JSON.stringify({ plan: STATE.candidates }) });
+  await load();
+  banner(`已应用 ${r.applied.length} 个候选席位`, 'ok');
+}
+
+function renderTables() {
+  document.getElementById('tables').innerHTML = STATE.tables.map(t => `
+    <div style="margin-bottom:12px">
+      <div><b>${esc(t.name)}</b> <span class="kv">${t.seatsUsed}/${t.capacity} 座 · ${t.childCapacity==null?'儿童椅不限':t.childCapacity+' 张童椅'}</span></div>
+      <div class="kv">${t.seated.length ? t.seated.map(s => `${esc(s.guestId)}${s.locked?'🔒':''}`).join('，') : '（空桌）'}</div>
+    </div>`).join('');
+}
+
+async function openGuest(id) {
+  const d = await api('/api/guests/' + encodeURIComponent(id));
+  document.getElementById('histTitle').textContent = `${d.guest.id} · ${d.guest.name} 事件历史`;
+  const r = d.guest.rsvp;
+  let html = `<div class="kv" style="margin-bottom:8px">
+      当前物化状态：${r ? esc(r.status ?? '无回复') + ' · ' + esc(r.source) + ' #' + r.eventNo + ' · ' + (r.partySize ?? '—') + '人' : '无'}
+      ${d.assignment ? ' · 席位 '+esc(d.assignment.tableId)+(d.assignment.locked?' 🔒锁定':'') : ' · 未排座'}
+    </div>`;
+  if (r?.conflict) html += `<div class="alert err">${esc(r.conflict.reason)}</div>`;
+  html += '<table><thead><tr><th>#</th><th>来源#序号</th><th>状态</th><th>人/童</th><th>发生时间</th><th>留痕</th></tr></thead><tbody>';
+  for (const e of d.history) {
+    const tags = [];
+    if (e.stale) tags.push('<span class="tag stale">乱序旧事件·仅留痕</span>');
+    if (e.supersededBy) tags.push(`<span class="tag stale">被 #${e.supersededBy} 覆盖</span>`);
+    if (e.isResolution) tags.push('<span class="tag res">人工裁决</span>');
+    html += `<tr><td>${e.eventNo}</td><td>${esc(e.source)}#${e.sourceSeq}</td>
+      <td>${esc(e.status)}</td><td>${e.partySize ?? '—'}/${e.children ?? 0}${e.childSeatNeeded?'🧒':''}</td>
+      <td class="kv">${esc(e.occurredAt)}</td><td>${tags.join(' ') || '<span class="tag">当前生效</span>'}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('histBody').innerHTML = html;
+  histDlg.showModal();
+}
+
+async function doImport() {
+  const box = document.getElementById('importResult');
+  box.innerHTML = '';
+  const csv = document.getElementById('csv').value;
+  try {
+    const r = await api('/api/import', { method:'POST', body: JSON.stringify({ csv, source: document.getElementById('src').value.trim() }) });
+    let msg = `整批导入完成：新事件 ${r.accepted.length} 条；重复事件幂等跳过 ${r.duplicates} 条；乱序旧事件留痕 ${r.stale.length} 条（不覆盖较新状态）。`;
+    if (r.stale.length) msg += '\n留痕: ' + r.stale.map(s => `#${s.eventNo}(${s.guestId} ${s.source}#${s.sourceSeq})`).join('，');
+    if (r.conflictGuests.length) msg += `\n⚠ 跨来源冲突待人工处理：${r.conflictGuests.map(c=>c.guestId).join('，')}`;
+    box.innerHTML = `<div class="alert ${r.conflictGuests.length?'warn':'ok'}">${esc(msg)}</div>`;
+    await load();
+  } catch (e) {
+    let msg = esc(e.message) + '\n';
+    if (e.errors) for (const er of e.errors) msg += `第 ${er.line} 行 [${er.code}] ${esc(er.message)}\n`;
+    msg += '\n整批拒绝：账本、当前状态、席位与桌卡均未改变。';
+    box.innerHTML = `<div class="alert err">${msg}</div>`;
+  }
+}
+
+document.getElementById('file').addEventListener('change', async (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  document.getElementById('csv').value = await f.text();
+  if (!document.getElementById('src').value) {
+    const stem = f.name.replace(/\.[^.]+$/, '');
+    document.getElementById('src').value = stem;
+  }
+});
+
+function banner(text, kind='info') {
+  const b = document.getElementById('banner');
+  b.innerHTML = `<div class="alert ${kind}">${esc(text)}</div>`;
+  setTimeout(()=>{ b.innerHTML=''; }, 4000);
+}
+
+load();
+</script>
+</body>
+</html>

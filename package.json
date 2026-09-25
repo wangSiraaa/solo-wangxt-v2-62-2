@@ -1,0 +1,17 @@
+{
+  "name": "rsvp-ledger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "可追溯的 RSVP 事件账本：双来源离线表格补录、幂等导入、乱序留痕、跨来源冲突待处理、排座只给候选不动席位",
+  "type": "module",
+  "bin": {
+    "rsvp": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "serve": "node src/cli.js serve"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

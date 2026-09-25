@@ -1,0 +1,5 @@
+source,source_seq,guest_id,status,party_size,children,child_seat,occurred_at
+family-a,1,G01,confirmed,3,1,1,2026-09-20T10:00:00Z
+family-a,2,G02,confirmed,2,0,0,2026-09-20T10:05:00Z
+family-a,3,G03,confirmed,1,0,0,2026-09-22T09:00:00Z
+family-a,4,G04,pending,1,0,0,2026-09-21T12:00:00Z

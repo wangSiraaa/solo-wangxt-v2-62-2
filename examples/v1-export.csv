@@ -1,0 +1,5 @@
+guest_id,name,rsvp,party_size,children,child_seat,table_id,locked,capacity,table_name,updated_at
+G01,张三,yes,3,1,1,T1,1,10,主桌,2026-09-15T00:00:00Z
+G02,李四,yes,2,0,0,T1,0,10,主桌,2026-09-15T00:00:00Z
+G03,王五,maybe,,,,,,,,
+G04,赵六,no,1,0,0,,,,,,,
